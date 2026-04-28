@@ -1,0 +1,12 @@
+[project]
+name = "llm-pruning"
+version = "0.1.0"
+description = "Early experiments on domain-localized LLM activations and pruning."
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "transformers",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

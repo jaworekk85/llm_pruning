@@ -1,0 +1,5 @@
+Explain what a prime number is.
+How do you solve a linear equation?
+What is the Pythagorean theorem?
+Explain the idea of a derivative in calculus.
+What does probability measure?
