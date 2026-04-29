@@ -12,6 +12,18 @@ SPLIT_BY_CONCEPT_INDEX = {
     "validation": range(6, 8),
     "test": range(8, 10),
 }
+VARIANTS_PER_TYPE_BY_PROFILE = {
+    "pilot": {
+        "discovery": 1,
+        "validation": 1,
+        "test": 1,
+    },
+    "large": {
+        "discovery": 5,
+        "validation": 10,
+        "test": 10,
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -97,7 +109,255 @@ def split_for_concept(index: int) -> str:
     raise ValueError(f"No split configured for concept index {index}")
 
 
-def records_for_concept(domain: str, concept_index: int, concept: Concept) -> list[dict[str, str]]:
+def capitalized(text: str) -> str:
+    return text[0].upper() + text[1:] if text else text
+
+
+def definition_variants(domain: str, concept: Concept) -> list[tuple[str, str]]:
+    del domain
+    return [
+        (
+            f"What is {concept.term}?",
+            f"{capitalized(concept.term)} is {concept.definition}.",
+        ),
+        (
+            f"What does {concept.term} mean?",
+            f"{capitalized(concept.term)} means {concept.definition}.",
+        ),
+        (
+            f"How would you define {concept.term}?",
+            f"{capitalized(concept.term)} can be defined as {concept.definition}.",
+        ),
+        (
+            f"What is the basic idea of {concept.term}?",
+            f"The basic idea of {concept.term} is {concept.definition}.",
+        ),
+        (
+            f"What is a short definition of {concept.term}?",
+            f"A short definition of {concept.term} is {concept.definition}.",
+        ),
+        (
+            f"What concept does the term {concept.term} describe?",
+            f"The term {concept.term} describes {concept.definition}.",
+        ),
+        (
+            f"In simple terms, what is {concept.term}?",
+            f"In simple terms, {concept.term} is {concept.definition}.",
+        ),
+        (
+            f"What does someone mean by {concept.term}?",
+            f"Someone who refers to {concept.term} means {concept.definition}.",
+        ),
+        (
+            f"What is meant by {concept.term}?",
+            f"What is meant by {concept.term} is {concept.definition}.",
+        ),
+        (
+            f"How can {concept.term} be described?",
+            f"{capitalized(concept.term)} can be described as {concept.definition}.",
+        ),
+    ]
+
+
+def factual_variants(domain: str, concept: Concept) -> list[tuple[str, str]]:
+    del domain
+    return [
+        (
+            f"What is one important feature of {concept.term}?",
+            f"One important feature of {concept.term} is that {concept.feature}.",
+        ),
+        (
+            f"What feature helps identify {concept.term}?",
+            f"A feature that helps identify {concept.term} is that {concept.feature}.",
+        ),
+        (
+            f"What is a key property of {concept.term}?",
+            f"A key property of {concept.term} is that {concept.feature}.",
+        ),
+        (
+            f"What should someone remember about {concept.term}?",
+            f"Someone should remember that {concept.term} has this feature: {concept.feature}.",
+        ),
+        (
+            f"What fact is central to {concept.term}?",
+            f"A central fact about {concept.term} is that {concept.feature}.",
+        ),
+        (
+            f"What characteristic is associated with {concept.term}?",
+            f"A characteristic associated with {concept.term} is that {concept.feature}.",
+        ),
+        (
+            f"What is one trait of {concept.term}?",
+            f"One trait of {concept.term} is that {concept.feature}.",
+        ),
+        (
+            f"What makes {concept.term} recognizable?",
+            f"{capitalized(concept.term)} is recognizable because {concept.feature}.",
+        ),
+        (
+            f"What detail matters for understanding {concept.term}?",
+            f"A detail that matters for understanding {concept.term} is that {concept.feature}.",
+        ),
+        (
+            f"What is a useful fact about {concept.term}?",
+            f"A useful fact about {concept.term} is that {concept.feature}.",
+        ),
+    ]
+
+
+def explanation_variants(domain: str, concept: Concept) -> list[tuple[str, str]]:
+    return [
+        (
+            f"Why is {concept.term} important in {domain}?",
+            f"{capitalized(concept.term)} is important in {domain} because {concept.importance}.",
+        ),
+        (
+            f"Why does {concept.term} matter in {domain}?",
+            f"{capitalized(concept.term)} matters in {domain} because {concept.importance}.",
+        ),
+        (
+            f"What makes {concept.term} useful in {domain}?",
+            f"{capitalized(concept.term)} is useful in {domain} because {concept.importance}.",
+        ),
+        (
+            f"Why should someone studying {domain} know about {concept.term}?",
+            f"Someone studying {domain} should know about {concept.term} because {concept.importance}.",
+        ),
+        (
+            f"How does {concept.term} support work in {domain}?",
+            f"{capitalized(concept.term)} supports work in {domain} because {concept.importance}.",
+        ),
+        (
+            f"What role does {concept.term} play in {domain}?",
+            f"The role of {concept.term} in {domain} is important because {concept.importance}.",
+        ),
+        (
+            f"Why is {concept.term} a significant idea in {domain}?",
+            f"{capitalized(concept.term)} is significant in {domain} because {concept.importance}.",
+        ),
+        (
+            f"How does {concept.term} help explain problems in {domain}?",
+            f"{capitalized(concept.term)} helps explain problems in {domain} because {concept.importance}.",
+        ),
+        (
+            f"What benefit does understanding {concept.term} provide in {domain}?",
+            f"Understanding {concept.term} helps in {domain} because {concept.importance}.",
+        ),
+        (
+            f"Why might {concept.term} be taught in a {domain} lesson?",
+            f"{capitalized(concept.term)} might be taught in a {domain} lesson because {concept.importance}.",
+        ),
+    ]
+
+
+def comparison_variants(domain: str, concept: Concept) -> list[tuple[str, str]]:
+    del domain
+    contrast = capitalized(concept.contrast)
+    return [
+        (
+            f"How is {concept.term} different from {concept.related_term}?",
+            f"{contrast}.",
+        ),
+        (
+            f"What is the difference between {concept.term} and {concept.related_term}?",
+            f"The difference is that {concept.contrast}.",
+        ),
+        (
+            f"How would you contrast {concept.term} with {concept.related_term}?",
+            f"To contrast them, {concept.contrast}.",
+        ),
+        (
+            f"Why is {concept.term} not the same as {concept.related_term}?",
+            f"{capitalized(concept.term)} is not the same as {concept.related_term} because {concept.contrast}.",
+        ),
+        (
+            f"What separates {concept.term} from {concept.related_term}?",
+            f"What separates them is that {concept.contrast}.",
+        ),
+        (
+            f"How can someone tell {concept.term} apart from {concept.related_term}?",
+            f"Someone can tell them apart because {concept.contrast}.",
+        ),
+        (
+            f"What distinction exists between {concept.term} and {concept.related_term}?",
+            f"The distinction is that {concept.contrast}.",
+        ),
+        (
+            f"How do {concept.term} and {concept.related_term} differ?",
+            f"They differ because {concept.contrast}.",
+        ),
+        (
+            f"What comparison helps explain {concept.term} versus {concept.related_term}?",
+            f"A helpful comparison is that {concept.contrast}.",
+        ),
+        (
+            f"In what way is {concept.term} unlike {concept.related_term}?",
+            f"{capitalized(concept.term)} is unlike {concept.related_term} because {concept.contrast}.",
+        ),
+    ]
+
+
+def application_variants(domain: str, concept: Concept) -> list[tuple[str, str]]:
+    application = capitalized(concept.application)
+    return [
+        (
+            f"How could someone apply {concept.term} in a simple {domain} task?",
+            f"{application}.",
+        ),
+        (
+            f"What is a simple use of {concept.term} in {domain}?",
+            f"A simple use is this: {concept.application}.",
+        ),
+        (
+            f"What is an example of applying {concept.term} in {domain}?",
+            f"An example is that {concept.application}.",
+        ),
+        (
+            f"How might a beginner use {concept.term} in {domain}?",
+            f"A beginner might use it this way: {concept.application}.",
+        ),
+        (
+            f"What practical task could involve {concept.term} in {domain}?",
+            f"A practical task could involve this: {concept.application}.",
+        ),
+        (
+            f"How can {concept.term} be used in practice in {domain}?",
+            f"In practice, {concept.application}.",
+        ),
+        (
+            f"What scenario shows {concept.term} being used in {domain}?",
+            f"One scenario is that {concept.application}.",
+        ),
+        (
+            f"How could someone demonstrate {concept.term} in {domain}?",
+            f"Someone could demonstrate it as follows: {concept.application}.",
+        ),
+        (
+            f"What would an applied example of {concept.term} look like in {domain}?",
+            f"An applied example would be this: {concept.application}.",
+        ),
+        (
+            f"How might {concept.term} guide a simple decision in {domain}?",
+            f"{capitalized(concept.term)} might guide a decision because {concept.application}.",
+        ),
+    ]
+
+
+VARIANT_BUILDERS = {
+    "definition": definition_variants,
+    "factual": factual_variants,
+    "explanation": explanation_variants,
+    "comparison": comparison_variants,
+    "application": application_variants,
+}
+
+
+def records_for_concept(
+    domain: str,
+    concept_index: int,
+    concept: Concept,
+    variants_per_type: int,
+) -> list[dict[str, str]]:
     split = split_for_concept(concept_index)
     base_id = f"{domain}.qa_v1.{concept_index:02d}"
     base = {
@@ -111,54 +371,47 @@ def records_for_concept(domain: str, concept_index: int, concept: Concept) -> li
         "notes": "Generated deterministically by experiments/build_qa_v1.py from manual concept blueprints.",
     }
 
-    rows = [
-        {
-            **base,
-            "id": f"{base_id}.definition",
-            "prompt_type": "definition",
-            "prompt": f"What is {concept.term}?",
-            "target": f"{concept.term.capitalize()} is {concept.definition}.",
-        },
-        {
-            **base,
-            "id": f"{base_id}.factual",
-            "prompt_type": "factual",
-            "prompt": f"What is one important feature of {concept.term}?",
-            "target": f"One important feature of {concept.term} is that {concept.feature}.",
-        },
-        {
-            **base,
-            "id": f"{base_id}.explanation",
-            "prompt_type": "explanation",
-            "prompt": f"Why is {concept.term} important in {domain}?",
-            "target": f"{concept.term.capitalize()} is important in {domain} because {concept.importance}.",
-        },
-        {
-            **base,
-            "id": f"{base_id}.comparison",
-            "prompt_type": "comparison",
-            "prompt": f"How is {concept.term} different from {concept.related_term}?",
-            "target": concept.contrast[0].upper() + concept.contrast[1:] + ".",
-        },
-        {
-            **base,
-            "id": f"{base_id}.application",
-            "prompt_type": "application",
-            "prompt": f"How could someone apply {concept.term} in a simple {domain} task?",
-            "target": concept.application[0].upper() + concept.application[1:] + ".",
-        },
-    ]
+    rows: list[dict[str, str]] = []
+    for prompt_type in PROMPT_TYPES:
+        variants = VARIANT_BUILDERS[prompt_type](domain, concept)
+        if len(variants) < variants_per_type:
+            raise ValueError(
+                f"Only {len(variants)} {prompt_type} variants are available, "
+                f"but {variants_per_type} were requested."
+            )
+        for variant_index, (prompt, target) in enumerate(variants[:variants_per_type]):
+            record_id = f"{base_id}.{prompt_type}"
+            if variants_per_type > 1:
+                record_id = f"{record_id}.{variant_index:02d}"
+            rows.append(
+                {
+                    **base,
+                    "id": record_id,
+                    "prompt_type": prompt_type,
+                    "prompt": prompt,
+                    "target": target,
+                }
+            )
     return rows
 
 
-def build_records() -> list[dict[str, str]]:
+def build_records(profile: str) -> list[dict[str, str]]:
+    variants_by_split = VARIANTS_PER_TYPE_BY_PROFILE[profile]
     records: list[dict[str, str]] = []
     for domain, concepts in BLUEPRINTS.items():
         if len(concepts) != 10:
             raise ValueError(f"Expected 10 concepts for {domain}, got {len(concepts)}")
 
         for concept_index, concept in enumerate(concepts):
-            records.extend(records_for_concept(domain, concept_index, concept))
+            split = split_for_concept(concept_index)
+            records.extend(
+                records_for_concept(
+                    domain,
+                    concept_index,
+                    concept,
+                    variants_per_type=variants_by_split[split],
+                )
+            )
 
     return records
 
@@ -166,12 +419,22 @@ def build_records() -> list[dict[str, str]]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build the deterministic QA v1 prompt set.")
     parser.add_argument("--output", type=Path, default=Path("data/prompt_sets/qa_v1.jsonl"))
+    parser.add_argument(
+        "--profile",
+        choices=sorted(VARIANTS_PER_TYPE_BY_PROFILE),
+        default="pilot",
+        help=(
+            "pilot reproduces the original 250-record dataset. "
+            "large writes 1,750 records: 150 discovery, 100 validation, "
+            "and 100 test records per domain."
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    records = build_records()
+    records = build_records(args.profile)
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     with args.output.open("w", encoding="utf-8") as file:

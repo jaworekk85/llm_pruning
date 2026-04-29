@@ -50,6 +50,7 @@ class LossRecord:
 class ComponentSelection:
     top_target: list[str]
     random_controls: list[list[str]]
+    control_strategy: str
 
 
 def parse_args() -> argparse.Namespace:
@@ -92,6 +93,16 @@ def parse_args() -> argparse.Namespace:
         help="Number of independently sampled random control component sets.",
     )
     parser.add_argument(
+        "--control-strategy",
+        choices=["random", "layer_matched"],
+        default="random",
+        help=(
+            "How to sample control component sets. layer_matched samples one "
+            "control from each selected component's module/layer and is "
+            "intended for indexed components such as heads and MLP neurons."
+        ),
+    )
+    parser.add_argument(
         "--ranking-metric",
         choices=["selectivity", "effect_size"],
         default="selectivity",
@@ -124,6 +135,77 @@ def load_component_scores(path: Path) -> list[ComponentScoreRow]:
     return rows
 
 
+def component_module_name(component: str) -> str:
+    return component.rsplit("[", maxsplit=1)[0] if component.endswith("]") else component
+
+
+def sample_random_controls(
+    target_rows: list[ComponentScoreRow],
+    selected_components: list[str],
+    component_count: int,
+    random_control_repeats: int,
+    rng: random.Random,
+) -> list[list[str]]:
+    selected_set = set(selected_components)
+    random_pool = [row.component for row in target_rows if row.component not in selected_set]
+    if len(random_pool) < component_count:
+        raise ValueError("Not enough components left for random control selection.")
+
+    return [
+        rng.sample(random_pool, k=component_count)
+        for _repeat_index in range(random_control_repeats)
+    ]
+
+
+def sample_layer_matched_controls(
+    target_rows: list[ComponentScoreRow],
+    selected_components: list[str],
+    random_control_repeats: int,
+    rng: random.Random,
+) -> list[list[str]]:
+    selected_set = set(selected_components)
+    components_by_module: dict[str, list[str]] = {}
+    for row in target_rows:
+        if row.component in selected_set:
+            continue
+        components_by_module.setdefault(
+            component_module_name(row.component),
+            [],
+        ).append(row.component)
+
+    selected_modules = [component_module_name(component) for component in selected_components]
+    missing_modules = [
+        module
+        for module in selected_modules
+        if not components_by_module.get(module)
+    ]
+    if missing_modules:
+        raise ValueError(
+            "Layer-matched controls require alternate indexed components in "
+            f"each selected module. Missing candidates for: {sorted(set(missing_modules))}"
+        )
+
+    controls: list[list[str]] = []
+    for _repeat_index in range(random_control_repeats):
+        control_set: list[str] = []
+        used_components: set[str] = set()
+        for module in selected_modules:
+            candidates = [
+                component
+                for component in components_by_module[module]
+                if component not in used_components
+            ]
+            if not candidates:
+                raise ValueError(
+                    f"Not enough layer-matched candidates for module: {module}"
+                )
+            sampled = rng.choice(candidates)
+            control_set.append(sampled)
+            used_components.add(sampled)
+        controls.append(control_set)
+    return controls
+
+
 def select_components(
     rows: list[ComponentScoreRow],
     target_domain: str,
@@ -131,6 +213,7 @@ def select_components(
     component_count: int,
     random_seed: int,
     random_control_repeats: int,
+    control_strategy: str,
 ) -> ComponentSelection:
     target_rows = [row for row in rows if row.domain == target_domain]
     if not target_rows:
@@ -152,19 +235,29 @@ def select_components(
 
     selected_components = [row.component for row in selected_rows]
 
-    selected_set = set(selected_components)
-    random_pool = [row.component for row in target_rows if row.component not in selected_set]
-    if len(random_pool) < component_count:
-        raise ValueError("Not enough components left for random control selection.")
-
     rng = random.Random(random_seed)
-    random_controls = [
-        rng.sample(random_pool, k=component_count)
-        for _repeat_index in range(random_control_repeats)
-    ]
+    if control_strategy == "random":
+        random_controls = sample_random_controls(
+            target_rows,
+            selected_components,
+            component_count,
+            random_control_repeats,
+            rng,
+        )
+    elif control_strategy == "layer_matched":
+        random_controls = sample_layer_matched_controls(
+            target_rows,
+            selected_components,
+            random_control_repeats,
+            rng,
+        )
+    else:
+        raise ValueError(f"Unsupported control strategy: {control_strategy}")
+
     return ComponentSelection(
         top_target=selected_components,
         random_controls=random_controls,
+        control_strategy=control_strategy,
     )
 
 
@@ -565,9 +658,10 @@ def main() -> None:
         component_count=args.component_count,
         random_seed=args.random_seed,
         random_control_repeats=args.random_control_repeats,
+        control_strategy=args.control_strategy,
     )
 
-    print("Selected components:")
+    print(f"Selected components (control_strategy={selection.control_strategy}):")
     for component in selection.top_target:
         print(f"  top_target: {component}")
     for repeat_index, random_components in enumerate(selection.random_controls):
