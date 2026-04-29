@@ -10,7 +10,9 @@ import torch
 class ActivationRecord:
     domain: str
     prompt_index: int
+    granularity: str
     module_name: str
+    unit_index: int | None
     mean_abs: float
     std: float
     max_abs: float
@@ -36,10 +38,123 @@ def first_tensor(value: Any) -> torch.Tensor | None:
     return None
 
 
+def summarize_tensor(
+    *,
+    domain: str,
+    prompt_index: int,
+    granularity: str,
+    module_name: str,
+    tensor: torch.Tensor,
+    unit_index: int | None = None,
+) -> ActivationRecord:
+    values = tensor.detach().float()
+    return ActivationRecord(
+        domain=domain,
+        prompt_index=prompt_index,
+        granularity=granularity,
+        module_name=module_name,
+        unit_index=unit_index,
+        mean_abs=values.abs().mean().item(),
+        std=values.std(unbiased=False).item(),
+        max_abs=values.abs().max().item(),
+        numel=values.numel(),
+    )
+
+
+def summarize_units(
+    *,
+    domain: str,
+    prompt_index: int,
+    granularity: str,
+    module_name: str,
+    tensor: torch.Tensor,
+    top_units_per_module: int | None = None,
+) -> list[ActivationRecord]:
+    values = tensor.detach().float()
+    if values.ndim < 1:
+        return []
+
+    flat = values.reshape(-1, values.shape[-1])
+    unit_means = flat.abs().mean(dim=0)
+
+    if top_units_per_module is None:
+        unit_indices = range(flat.shape[-1])
+    else:
+        k = min(top_units_per_module, flat.shape[-1])
+        unit_indices = torch.topk(unit_means, k=k).indices.tolist()
+
+    records: list[ActivationRecord] = []
+    for unit_index in unit_indices:
+        unit_values = flat[:, unit_index]
+        records.append(
+            summarize_tensor(
+                domain=domain,
+                prompt_index=prompt_index,
+                granularity=granularity,
+                module_name=module_name,
+                unit_index=int(unit_index),
+                tensor=unit_values,
+            )
+        )
+    return records
+
+
+def summarize_attention_heads(
+    *,
+    domain: str,
+    prompt_index: int,
+    module_name: str,
+    tensor: torch.Tensor,
+    num_heads: int,
+    top_units_per_module: int | None = None,
+) -> list[ActivationRecord]:
+    values = tensor.detach().float()
+    if values.ndim != 3:
+        return []
+
+    batch_size, seq_len, hidden_size = values.shape
+    if hidden_size % num_heads != 0:
+        raise ValueError(
+            f"Cannot split {module_name} hidden size {hidden_size} into {num_heads} heads."
+        )
+
+    head_dim = hidden_size // num_heads
+    by_head = values.reshape(batch_size, seq_len, num_heads, head_dim)
+    head_scores = by_head.abs().mean(dim=(0, 1, 3))
+
+    if top_units_per_module is None:
+        head_indices = range(num_heads)
+    else:
+        k = min(top_units_per_module, num_heads)
+        head_indices = torch.topk(head_scores, k=k).indices.tolist()
+
+    records: list[ActivationRecord] = []
+    for head_index in head_indices:
+        records.append(
+            summarize_tensor(
+                domain=domain,
+                prompt_index=prompt_index,
+                granularity="attention_head",
+                module_name=module_name,
+                unit_index=int(head_index),
+                tensor=by_head[:, :, head_index, :],
+            )
+        )
+    return records
+
+
 class ActivationCollector:
-    def __init__(self, model: torch.nn.Module, module_filter: str = "mlp") -> None:
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        granularity: str = "mlp_module",
+        module_filter: str | None = None,
+        top_units_per_module: int | None = None,
+    ) -> None:
         self.model = model
+        self.granularity = granularity
         self.module_filter = module_filter
+        self.top_units_per_module = top_units_per_module
         self.records: list[ActivationRecord] = []
         self._handles: list[Any] = []
         self._domain = "unknown"
@@ -49,13 +164,38 @@ class ActivationCollector:
         if self._handles:
             return
 
-        for name, module in self.model.named_modules():
-            if self.module_filter in name:
-                handle = module.register_forward_hook(self._make_hook(name))
-                self._handles.append(handle)
+        if self.granularity == "mlp_module":
+            module_filter = self.module_filter or ".mlp"
+            for name, module in self.model.named_modules():
+                if name.endswith(module_filter):
+                    handle = module.register_forward_hook(self._make_module_hook(name))
+                    self._handles.append(handle)
+
+        elif self.granularity == "mlp_neuron":
+            module_filter = self.module_filter or ".mlp.gate_proj"
+            for name, module in self.model.named_modules():
+                if name.endswith(module_filter):
+                    handle = module.register_forward_hook(self._make_unit_hook(name))
+                    self._handles.append(handle)
+
+        elif self.granularity == "attention_head":
+            module_filter = self.module_filter or ".self_attn.o_proj"
+            num_heads = int(getattr(self.model.config, "num_attention_heads"))
+            for name, module in self.model.named_modules():
+                if name.endswith(module_filter):
+                    handle = module.register_forward_pre_hook(
+                        self._make_attention_head_hook(name, num_heads)
+                    )
+                    self._handles.append(handle)
+
+        else:
+            raise ValueError(f"Unsupported hook granularity: {self.granularity}")
 
         if not self._handles:
-            raise ValueError(f"No modules matched filter: {self.module_filter}")
+            raise ValueError(
+                f"No modules matched granularity={self.granularity}, "
+                f"module_filter={self.module_filter}"
+            )
 
     def close(self) -> None:
         for handle in self._handles:
@@ -71,22 +211,59 @@ class ActivationCollector:
         self.records = []
         return records
 
-    def _make_hook(self, module_name: str):
+    def _make_module_hook(self, module_name: str):
         def hook(_module: torch.nn.Module, _inputs: tuple[Any, ...], output: Any) -> None:
             tensor = first_tensor(output)
             if tensor is None:
                 return
 
-            values = tensor.detach().float()
-            record = ActivationRecord(
-                domain=self._domain,
-                prompt_index=self._prompt_index,
-                module_name=module_name,
-                mean_abs=values.abs().mean().item(),
-                std=values.std().item(),
-                max_abs=values.abs().max().item(),
-                numel=values.numel(),
+            self.records.append(
+                summarize_tensor(
+                    domain=self._domain,
+                    prompt_index=self._prompt_index,
+                    granularity=self.granularity,
+                    module_name=module_name,
+                    unit_index=None,
+                    tensor=tensor,
+                )
             )
-            self.records.append(record)
+
+        return hook
+
+    def _make_unit_hook(self, module_name: str):
+        def hook(_module: torch.nn.Module, _inputs: tuple[Any, ...], output: Any) -> None:
+            tensor = first_tensor(output)
+            if tensor is None:
+                return
+
+            self.records.extend(
+                summarize_units(
+                    domain=self._domain,
+                    prompt_index=self._prompt_index,
+                    granularity=self.granularity,
+                    module_name=module_name,
+                    tensor=tensor,
+                    top_units_per_module=self.top_units_per_module,
+                )
+            )
+
+        return hook
+
+    def _make_attention_head_hook(self, module_name: str, num_heads: int):
+        def hook(_module: torch.nn.Module, inputs: tuple[Any, ...]) -> None:
+            tensor = first_tensor(inputs)
+            if tensor is None:
+                return
+
+            self.records.extend(
+                summarize_attention_heads(
+                    domain=self._domain,
+                    prompt_index=self._prompt_index,
+                    module_name=module_name,
+                    tensor=tensor,
+                    num_heads=num_heads,
+                    top_units_per_module=self.top_units_per_module,
+                )
+            )
 
         return hook

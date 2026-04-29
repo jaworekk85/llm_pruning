@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from llm_pruning.prompt_records import group_prompts_by_domain, load_prompt_records
+
 
 def load_prompt_file(path: Path) -> list[str]:
     prompts: list[str] = []
@@ -27,6 +29,17 @@ def load_domain_prompts(prompt_dir: Path) -> dict[str, list[str]]:
 
     if not domains:
         raise ValueError(f"No prompts found in: {prompt_dir}")
+
+    return domains
+
+
+def load_domain_prompts_jsonl(path: Path, split: str | None = None) -> dict[str, list[str]]:
+    records = load_prompt_records(path)
+    domains = group_prompts_by_domain(records, split=split)
+
+    if not domains:
+        split_text = f" for split '{split}'" if split is not None else ""
+        raise ValueError(f"No prompts found in {path}{split_text}")
 
     return domains
 
