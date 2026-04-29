@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = REPO_ROOT / "src"
@@ -78,6 +79,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--target-domain", required=True)
     parser.add_argument("--component-count", type=int, default=5)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="Prompts to score per forward pass. Increase on GPU until memory is near full.",
+    )
     parser.add_argument(
         "--random-control-repeats",
         type=int,
@@ -242,24 +249,139 @@ def record_loss(loaded, record: PromptRecord, loss_scope: str) -> float:
     return target_loss(loaded, record.prompt, record.target)
 
 
+def batched(items: list[PromptRecord], batch_size: int) -> list[list[PromptRecord]]:
+    if batch_size < 1:
+        raise ValueError("--batch-size must be at least 1")
+
+    return [
+        items[start : start + batch_size]
+        for start in range(0, len(items), batch_size)
+    ]
+
+
+def answer_with_eos(loaded, target: str) -> str:
+    answer = target.strip()
+    if loaded.tokenizer.eos_token:
+        answer = f"{answer}{loaded.tokenizer.eos_token}"
+    return answer
+
+
+def ensure_padding_token(loaded) -> None:
+    if loaded.tokenizer.pad_token is None:
+        loaded.tokenizer.pad_token = loaded.tokenizer.eos_token
+
+
+def per_record_losses(loaded, texts: list[str], prompt_token_counts: list[int]) -> list[float]:
+    ensure_padding_token(loaded)
+    inputs = loaded.tokenizer(
+        texts,
+        return_tensors="pt",
+        padding=True,
+    ).to(loaded.device)
+
+    labels = inputs["input_ids"].clone()
+    labels[inputs["attention_mask"] == 0] = -100
+    for row_index, prompt_token_count in enumerate(prompt_token_counts):
+        labels[row_index, :prompt_token_count] = -100
+
+    with torch.no_grad():
+        logits = loaded.model(
+            **inputs,
+            use_cache=False,
+        ).logits
+
+    shift_logits = logits[:, :-1, :].contiguous()
+    shift_labels = labels[:, 1:].contiguous()
+    token_losses = F.cross_entropy(
+        shift_logits.view(-1, shift_logits.size(-1)),
+        shift_labels.view(-1),
+        ignore_index=-100,
+        reduction="none",
+    ).view(shift_labels.shape)
+
+    valid_tokens = shift_labels.ne(-100)
+    losses: list[float] = []
+    for row_index in range(shift_labels.shape[0]):
+        token_count = int(valid_tokens[row_index].sum().item())
+        if token_count == 0:
+            raise ValueError("Cannot score a record with no unmasked tokens.")
+        losses.append(
+            float(
+                token_losses[row_index][valid_tokens[row_index]].mean().item()
+            )
+        )
+    return losses
+
+
+def prompt_losses_batch(loaded, records: list[PromptRecord]) -> list[float]:
+    prompts = [format_chat_prompt(record.prompt) for record in records]
+    return per_record_losses(
+        loaded,
+        prompts,
+        prompt_token_counts=[0 for _record in records],
+    )
+
+
+def target_losses_batch(loaded, records: list[PromptRecord]) -> list[float]:
+    missing_targets = [record.id for record in records if record.target is None]
+    if missing_targets:
+        raise ValueError(
+            "Records have no target answer: "
+            f"{', '.join(missing_targets)}. "
+            "Use --loss-scope prompt only for legacy smoke tests."
+        )
+
+    prompts = [format_chat_prompt(record.prompt) for record in records]
+    answers = [answer_with_eos(loaded, str(record.target)) for record in records]
+    full_texts = [
+        f"{prompt}{answer}"
+        for prompt, answer in zip(prompts, answers, strict=True)
+    ]
+    prompt_token_counts = [
+        int(
+            loaded.tokenizer(
+                prompt,
+                return_tensors="pt",
+            )["input_ids"].shape[-1]
+        )
+        for prompt in prompts
+    ]
+    return per_record_losses(loaded, full_texts, prompt_token_counts)
+
+
+def record_losses_batch(
+    loaded,
+    records: list[PromptRecord],
+    loss_scope: str,
+) -> list[float]:
+    if loss_scope == "prompt":
+        return prompt_losses_batch(loaded, records)
+    return target_losses_batch(loaded, records)
+
+
 def evaluate_condition(
     loaded,
     prompts_by_domain: dict[str, list[PromptRecord]],
     condition: str,
     loss_scope: str,
+    batch_size: int,
 ) -> list[LossRecord]:
     loss_records: list[LossRecord] = []
     for domain, prompt_records in prompts_by_domain.items():
         print(f"Evaluating {condition}: {domain} ({len(prompt_records)} prompt(s))")
-        for prompt_index, prompt_record in enumerate(prompt_records):
-            loss_records.append(
-                LossRecord(
-                    condition=condition,
-                    domain=domain,
-                    prompt_index=prompt_index,
-                    loss=record_loss(loaded, prompt_record, loss_scope),
+        prompt_offset = 0
+        for prompt_batch in batched(prompt_records, batch_size):
+            losses = record_losses_batch(loaded, prompt_batch, loss_scope)
+            for batch_index, loss in enumerate(losses):
+                loss_records.append(
+                    LossRecord(
+                        condition=condition,
+                        domain=domain,
+                        prompt_index=prompt_offset + batch_index,
+                        loss=loss,
+                    )
                 )
-            )
+            prompt_offset += len(prompt_batch)
     return loss_records
 
 
@@ -459,6 +581,7 @@ def main() -> None:
         prompts_by_domain,
         condition="baseline",
         loss_scope=args.loss_scope,
+        batch_size=args.batch_size,
     )
 
     with AblationManager(
@@ -472,6 +595,7 @@ def main() -> None:
                 prompts_by_domain,
                 condition="top_target",
                 loss_scope=args.loss_scope,
+                batch_size=args.batch_size,
             )
         )
 
@@ -487,6 +611,7 @@ def main() -> None:
                     prompts_by_domain,
                     condition=f"random_control_{repeat_index:03d}",
                     loss_scope=args.loss_scope,
+                    batch_size=args.batch_size,
                 )
             )
 

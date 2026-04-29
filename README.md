@@ -40,6 +40,14 @@ Activate the local virtual environment:
 .\venv\Scripts\Activate.ps1
 ```
 
+Optional: install a CUDA-enabled PyTorch build on machines with an NVIDIA GPU:
+
+```powershell
+pip uninstall torch -y
+pip install -r requirements-cuda-cu124.txt
+python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+```
+
 Run a generation sanity check:
 
 ```powershell
