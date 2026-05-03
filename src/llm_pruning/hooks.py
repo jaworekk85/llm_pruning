@@ -159,6 +159,8 @@ class ActivationCollector:
         self._handles: list[Any] = []
         self._domain = "unknown"
         self._prompt_index = -1
+        self._token_start: int | None = None
+        self._token_end: int | None = None
 
     def start(self) -> None:
         if self._handles:
@@ -206,16 +208,30 @@ class ActivationCollector:
         self._domain = domain
         self._prompt_index = prompt_index
 
+    def set_token_slice(self, token_start: int | None, token_end: int | None = None) -> None:
+        self._token_start = token_start
+        self._token_end = token_end
+
+    def clear_token_slice(self) -> None:
+        self._token_start = None
+        self._token_end = None
+
     def drain_records(self) -> list[ActivationRecord]:
         records = self.records
         self.records = []
         return records
+
+    def _slice_tokens(self, tensor: torch.Tensor) -> torch.Tensor:
+        if self._token_start is None or tensor.ndim < 2:
+            return tensor
+        return tensor[:, self._token_start : self._token_end, ...]
 
     def _make_module_hook(self, module_name: str):
         def hook(_module: torch.nn.Module, _inputs: tuple[Any, ...], output: Any) -> None:
             tensor = first_tensor(output)
             if tensor is None:
                 return
+            tensor = self._slice_tokens(tensor)
 
             self.records.append(
                 summarize_tensor(
@@ -235,6 +251,7 @@ class ActivationCollector:
             tensor = first_tensor(output)
             if tensor is None:
                 return
+            tensor = self._slice_tokens(tensor)
 
             self.records.extend(
                 summarize_units(
@@ -254,6 +271,7 @@ class ActivationCollector:
             tensor = first_tensor(inputs)
             if tensor is None:
                 return
+            tensor = self._slice_tokens(tensor)
 
             self.records.extend(
                 summarize_attention_heads(
