@@ -43,17 +43,23 @@ def load_model(
     model_name: str = DEFAULT_MODEL_NAME,
     device: str | None = None,
     dtype: str = "auto",
+    revision: str | None = None,
+    local_files_only: bool = False,
 ) -> LoadedModel:
     resolved_device = resolve_device(device)
     torch_dtype = resolve_dtype(dtype, resolved_device)
 
     print(f"Loading tokenizer: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name, revision=revision, local_files_only=local_files_only,
+    )
 
     print(f"Loading model: {model_name}")
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         dtype=torch_dtype,
+        revision=revision,
+        local_files_only=local_files_only,
     )
     model.to(resolved_device)
     model.eval()

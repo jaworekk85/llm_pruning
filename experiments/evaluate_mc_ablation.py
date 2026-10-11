@@ -8,9 +8,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-import torch
-import torch.nn.functional as F
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = REPO_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
@@ -18,7 +15,10 @@ if str(SRC_PATH) not in sys.path:
 
 from llm_pruning.ablations import AblationManager
 from llm_pruning.choice_records import ChoiceRecord, filter_choice_records, load_choice_records
-from llm_pruning.mc_prompts import candidate_text, format_choice_prompt
+from llm_pruning.mc_evaluation import (
+    CandidateScore, RecordDecision, batched, decisions_from_scores,
+    ensure_padding_token, score_candidate_batch,
+)
 from llm_pruning.models import DEFAULT_MODEL_NAME, load_model
 
 
@@ -34,35 +34,6 @@ class ComponentScoreRow:
 class ComponentSelection:
     top_target: list[str]
     random_controls: list[list[str]]
-
-
-@dataclass(frozen=True)
-class CandidateScore:
-    record_id: str
-    condition: str
-    domain: str
-    subject: str
-    split: str
-    choice_index: int
-    is_correct: bool
-    mean_logprob: float
-    sum_logprob: float
-    token_count: int
-
-
-@dataclass(frozen=True)
-class RecordDecision:
-    record_id: str
-    condition: str
-    domain: str
-    subject: str
-    split: str
-    answer_index: int
-    predicted_index: int
-    is_correct: bool
-    correct_mean_logprob: float
-    correct_loss: float
-    margin: float
 
 
 def parse_args() -> argparse.Namespace:
@@ -213,82 +184,6 @@ def load_eval_records(args: argparse.Namespace) -> dict[str, list[ChoiceRecord]]
     }
 
 
-def ensure_padding_token(loaded) -> None:
-    if loaded.tokenizer.pad_token is None:
-        loaded.tokenizer.pad_token = loaded.tokenizer.eos_token
-
-
-def batched(items: list[tuple[ChoiceRecord, int]], batch_size: int) -> list[list[tuple[ChoiceRecord, int]]]:
-    if batch_size < 1:
-        raise ValueError("--batch-size must be at least 1")
-    return [items[start : start + batch_size] for start in range(0, len(items), batch_size)]
-
-
-def score_candidate_batch(
-    loaded,
-    candidates: list[tuple[ChoiceRecord, int]],
-    condition: str,
-    scoring_mode: str,
-) -> list[CandidateScore]:
-    ensure_padding_token(loaded)
-    prompts = [format_choice_prompt(record) for record, _choice_index in candidates]
-    continuations = [
-        candidate_text(record, choice_index, scoring_mode)
-        for record, choice_index in candidates
-    ]
-    texts = [
-        f"{prompt}{continuation}"
-        for prompt, continuation in zip(prompts, continuations, strict=True)
-    ]
-
-    inputs = loaded.tokenizer(texts, return_tensors="pt", padding=True).to(loaded.device)
-    labels = inputs["input_ids"].clone()
-    labels[inputs["attention_mask"] == 0] = -100
-    prompt_token_counts = [
-        int(loaded.tokenizer(prompt, return_tensors="pt")["input_ids"].shape[-1])
-        for prompt in prompts
-    ]
-    for row_index, prompt_token_count in enumerate(prompt_token_counts):
-        labels[row_index, :prompt_token_count] = -100
-
-    with torch.no_grad():
-        logits = loaded.model(**inputs, use_cache=False).logits
-
-    shift_logits = logits[:, :-1, :].contiguous()
-    shift_labels = labels[:, 1:].contiguous()
-    losses = F.cross_entropy(
-        shift_logits.view(-1, shift_logits.size(-1)),
-        shift_labels.view(-1),
-        ignore_index=-100,
-        reduction="none",
-    ).view(shift_labels.shape)
-
-    scores: list[CandidateScore] = []
-    valid_tokens = shift_labels.ne(-100)
-    for row_index, (record, choice_index) in enumerate(candidates):
-        token_count = int(valid_tokens[row_index].sum().item())
-        if token_count == 0:
-            raise ValueError(f"No scored tokens for {record.id} choice {choice_index}")
-
-        token_loss_sum = float(losses[row_index][valid_tokens[row_index]].sum().item())
-        mean_logprob = -token_loss_sum / token_count
-        scores.append(
-            CandidateScore(
-                record_id=record.id,
-                condition=condition,
-                domain=record.domain,
-                subject=record.subject,
-                split=record.split,
-                choice_index=choice_index,
-                is_correct=choice_index == record.answer_index,
-                mean_logprob=mean_logprob,
-                sum_logprob=-token_loss_sum,
-                token_count=token_count,
-            )
-        )
-    return scores
-
-
 def evaluate_condition(
     loaded,
     records_by_domain: dict[str, list[ChoiceRecord]],
@@ -314,44 +209,6 @@ def evaluate_condition(
                 )
             )
     return scores
-
-
-def decisions_from_scores(scores: list[CandidateScore], records_by_id: dict[str, ChoiceRecord]) -> list[RecordDecision]:
-    grouped: dict[tuple[str, str], list[CandidateScore]] = {}
-    for score in scores:
-        grouped.setdefault((score.condition, score.record_id), []).append(score)
-
-    decisions: list[RecordDecision] = []
-    for (condition, record_id), candidate_scores in grouped.items():
-        record = records_by_id[record_id]
-        ranked = sorted(candidate_scores, key=lambda score: score.mean_logprob, reverse=True)
-        predicted = ranked[0]
-        correct = [
-            score
-            for score in candidate_scores
-            if score.choice_index == record.answer_index
-        ][0]
-        best_wrong = max(
-            score.mean_logprob
-            for score in candidate_scores
-            if score.choice_index != record.answer_index
-        )
-        decisions.append(
-            RecordDecision(
-                record_id=record_id,
-                condition=condition,
-                domain=record.domain,
-                subject=record.subject,
-                split=record.split,
-                answer_index=record.answer_index,
-                predicted_index=predicted.choice_index,
-                is_correct=predicted.choice_index == record.answer_index,
-                correct_mean_logprob=correct.mean_logprob,
-                correct_loss=-correct.mean_logprob,
-                margin=correct.mean_logprob - best_wrong,
-            )
-        )
-    return decisions
 
 
 def mean(values: list[float]) -> float:

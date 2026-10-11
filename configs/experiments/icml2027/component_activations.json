@@ -1,0 +1,16 @@
+{
+  "experiment_name": "icml2027_mmlu_component_activations_v1",
+  "model_name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+  "revision": null,
+  "dataset_path": "../../../data/prompt_sets/mmlu_mc.jsonl",
+  "target": {"field": "domain", "value": "medicine"},
+  "split": "discovery",
+  "scoring_mode": "choice_text",
+  "prompt_policy": "tokenizer_chat_v1",
+  "batch_size": 2,
+  "max_records_per_value": 2,
+  "seed": 0,
+  "device": "cpu",
+  "dtype": "float32",
+  "local_files_only": true
+}

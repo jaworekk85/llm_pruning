@@ -1,8 +1,24 @@
-# LLM Pruning Experiments
+# LLM Pruning Research Framework
 
-This repository explores whether domain-specific behavior in language models is localized in identifiable model components, such as layers, MLP blocks, neurons, or attention heads.
+This repository studies how knowledge, capabilities, domains and languages are organized inside pretrained LLMs, and how that organization relates to causal interventions, specialist compression and adaptation. Localization and compressibility are questions to test, not assumptions built into the framework.
 
-The current experimental model is `TinyLlama/TinyLlama-1.1B-Chat-v1.0`. The first milestone is to collect and compare activation statistics across domains before attempting causal ablation or pruning.
+Independent ICML 2027, UCT multilingual and Waikato streaming projects share the core tools. Current code includes activation collection, component rankings, causal ablations with random/layer-matched controls, and multiple-choice likelihood evaluation. TinyLlama is the legacy/smoke model; the proposed ICML pilot requires a 7–8B model and independent compression frontiers.
+
+Start with [STATUS.md](STATUS.md) and [docs/code_map.md](docs/code_map.md). The new [target baseline pipeline](docs/projects/icml2027.md) evaluates domains, languages, capabilities or tasks from a JSON configuration and saves reproducible run artifacts.
+
+[Wanda frontiers and organization diagnostics](docs/pruning_and_organization.md) add independent target-calibrated pruning, held-out quality/cost curves and discovery activation/causal concentration, overlap and stability. Dense storage and nonzero weights are measured separately. These tools have been checked on tiny random-init models, without pretrained research runs.
+
+## Config-driven Target Baseline
+
+Validate the example config and all dataset splits without loading a model:
+
+```powershell
+python experiments/icml2027/run_target_baseline.py --config configs/experiments/icml2027/target_baseline.json --validate-only
+```
+
+To evaluate, remove `--validate-only`. The example uses cached TinyLlama weights and a small validation sample; model downloads are disabled by default. Choose a fresh `experiment_name` for each run. Outputs include `manifest.json`, `config.json`, `summary.md`, per-value metrics, detailed candidate/decision CSVs and sampled record IDs. Existing result directories are rejected.
+
+This runner currently supports multiple-choice records. Language/capability/task labels must be provided explicitly in the dataset. The legacy commands below remain available; their result handling has not yet migrated to manifests and overwrite protection.
 
 ## Project Layout
 
@@ -99,10 +115,11 @@ Run a first ablation:
 python experiments/ablate_components.py --prompt-jsonl data/prompt_sets/seed_qa.jsonl --component-scores results/analysis_mlp_modules/component_scores.csv --granularity mlp_module --target-domain agriculture --component-count 5 --random-control-repeats 10 --output-dir results/ablation_agriculture_mlp_modules
 ```
 
-Run tests:
+Install the test dependency in the active environment and run offline tests:
 
 ```powershell
-python -m unittest discover -s tests
+python -m pip install -e ".[dev]"
+python -m pytest -q -x
 ```
 
 Validate prompt metadata:

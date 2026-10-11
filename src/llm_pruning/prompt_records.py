@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +35,9 @@ class PromptRecord:
     target: str | None = None
     license: str = "unknown"
     notes: str = ""
+    capability: str = ""
+    task: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PromptRecord":
@@ -45,6 +48,9 @@ class PromptRecord:
         if data["split"] not in ALLOWED_SPLITS:
             allowed = ", ".join(sorted(ALLOWED_SPLITS))
             raise ValueError(f"Invalid split '{data['split']}'. Use one of: {allowed}.")
+
+        if not isinstance(data.get("metadata", {}), dict):
+            raise ValueError("metadata must be a JSON object.")
 
         return cls(
             id=str(data["id"]),
@@ -59,6 +65,9 @@ class PromptRecord:
             target=str(data["target"]) if "target" in data and data["target"] is not None else None,
             license=str(data.get("license", "unknown")),
             notes=str(data.get("notes", "")),
+            capability=str(data.get("capability") or ""),
+            task=str(data.get("task") or ""),
+            metadata=dict(data.get("metadata", {})),
         )
 
 

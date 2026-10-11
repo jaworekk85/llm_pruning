@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,10 @@ class ChoiceRecord:
     answer_index: int
     license: str = "unknown"
     notes: str = ""
+    language: str = ""
+    capability: str = ""
+    task: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ChoiceRecord":
@@ -57,6 +61,9 @@ class ChoiceRecord:
                 f"answer_index {answer_index} is outside choices length {len(normalized_choices)}."
             )
 
+        if not isinstance(data.get("metadata", {}), dict):
+            raise ValueError("metadata must be a JSON object.")
+
         return cls(
             id=str(data["id"]),
             domain=str(data["domain"]),
@@ -69,6 +76,10 @@ class ChoiceRecord:
             answer_index=answer_index,
             license=str(data.get("license", "unknown")),
             notes=str(data.get("notes", "")),
+            language=str(data.get("language") or ""),
+            capability=str(data.get("capability") or ""),
+            task=str(data.get("task") or ""),
+            metadata=dict(data.get("metadata", {})),
         )
 
 
@@ -103,17 +114,23 @@ def filter_choice_records(
     ]
 
 
+def choice_input_key(question: str, choices: list[str]) -> tuple[str, tuple[str, ...]]:
+    """Identify an MC example by its stem and options, allowing option reordering."""
+    normalize = lambda text: " ".join(text.casefold().split())
+    return normalize(question), tuple(sorted(normalize(choice) for choice in choices))
+
+
 def validate_choice_records(records: list[ChoiceRecord]) -> list[str]:
     errors: list[str] = []
     seen_ids: set[str] = set()
-    seen_questions: dict[tuple[str, str], str] = {}
+    seen_questions: dict[tuple[str, tuple[str, tuple[str, ...]]], str] = {}
 
     for record in records:
         if record.id in seen_ids:
             errors.append(f"Duplicate id: {record.id}")
         seen_ids.add(record.id)
 
-        key = (record.domain, " ".join(record.question.lower().split()))
+        key = (record.domain, choice_input_key(record.question, record.choices))
         if key in seen_questions:
             errors.append(f"Duplicate question in domain: {record.id} duplicates {seen_questions[key]}")
         seen_questions[key] = record.id
