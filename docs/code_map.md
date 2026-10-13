@@ -29,12 +29,20 @@ Read the named module for a task; avoid opening datasets/results wholesale.
 | `wanda.py` | Reversible sequential-block, row-wise Wanda; full-attention Llama/Qwen2 projection adapter, padding-aware norms, actual dense storage/nonzero counts. |
 | `compression_frontier.py` | Prompt-only discovery calibration and held-out per-value/non-target/explicit-core quality at fixed independent pruning budgets. |
 | `organization_diagnostics.py` | Discovery-only activation/causal vectors, concentration, overlap and repeated-run stability with coverage and signed-score preservation. |
+| `short_answers.py` | Strict integer parsing, plain/native prompt formatting, greedy generation with left-padding/context guards. |
+| `linked_tasks.py` | Linked QA metadata on `PromptRecord`, full source/fact/episode split audit, staged inputs and decisions. |
+| `composition_analysis.py` | Full-cohort A/B/composed/oracle/staged readouts and paired source-group bootstrap; descriptive control contrasts. |
 
 ## Experiment entrypoints (`experiments/`)
 
 | Script(s) | Purpose |
 |---|---|
 | `icml2027/run_target_baseline.py` | Config-driven baseline per target-field value; `--validate-only` performs config/data preflight. |
+| `icml2027/build_composition_data.py`, `composition_data.py` | Deterministic context-supplied data or numeric-fact import; split source groups before variants; fresh manifests. |
+| `icml2027/build_controlled_composition.py`, `controlled_composition.py` | Research feasibility candidate: shared-evidence lookup→lookup / lookup→addition, executable labels, complete paired probes, expansion preserving splits. See `docs/composition_benchmark_design.md`. |
+| `icml2027/composition_controls.py` | Reference-only primary estimates and separate behavioral sensitivity/invariance probe readouts. |
+| `icml2027/plan_composition_precision.py` | Offline independent-source-group size scenarios, known-range bounds and assumed-SD power approximations; no inference. See `docs/composition_validation_plan.md`. |
+| `icml2027/run_composition_screen.py`, `composition_config.py` | Integer generation/Wanda screen, exact calibration token budgets, staged evaluation, artifacts and frozen test lock; no-model preflight. See `docs/projects/icml2027.md`. |
 | `collect_component_activations.py` | MC target-aware head/MLP-group collection; shared baseline config + collection flags; exclusive artifacts and `--validate-only`. See `docs/component_activations.md`. |
 | `evaluate_component_masks.py` | Held-out MC mask runner from a discovery run; provenance preflight, controls, paired outputs and exclusive artifacts. See `docs/component_causal_evaluation.md`. |
 | `analyze_mask_uncertainty.py` | Analyze saved paired deltas without inference; fresh artifacts, intervals and pilot precision estimates. |

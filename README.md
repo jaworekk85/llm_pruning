@@ -2,13 +2,22 @@
 
 This repository studies how knowledge, capabilities, domains and languages are organized inside pretrained LLMs, and how that organization relates to causal interventions, specialist compression and adaptation. Localization and compressibility are questions to test, not assumptions built into the framework.
 
-Independent ICML 2027, UCT multilingual and Waikato streaming projects share the core tools. Current code includes activation collection, component rankings, causal ablations with random/layer-matched controls, and multiple-choice likelihood evaluation. TinyLlama is the legacy/smoke model; the proposed ICML pilot requires a 7–8B model and independent compression frontiers.
+ICML 2027 is the primary publication objective: first screen whether pruning impairs skill composition beyond constituent-skill loss. Predicting specialist compressibility remains a secondary candidate. Planned UCT multilingual and Waikato streaming collaborations share tools while keeping independent questions. Priorities and decision gates: [research strategy](docs/research_strategy.md).
+
+Current code includes activation collection, component rankings, causal ablations, MC likelihood evaluation, and linked short-answer composition screens with independent Wanda pruning. Phase 1 is complete locally: data builder/importer, evaluator, controls, paired analysis and server config/preflight are available. Pretrained validation and targeted restoration remain outstanding; offline random models provide engineering checks only.
+
+Current composition task candidate: [controlled benchmark design](docs/composition_benchmark_design.md), with connected lookup and simple-addition families, shared evidence and paired input probes. Older station-count tasks are engineering exercises. Scientific dataset acceptance requires pretrained baseline behavior; the runner supports `--baseline-only`.
+For a fresh GPU server, start with [server handoff](docs/server_handoff.md): environment,
+regeneration of ignored datasets, pinned model/tokenizer and dense baseline before pruning.
 
 Start with [STATUS.md](STATUS.md) and [docs/code_map.md](docs/code_map.md). The new [target baseline pipeline](docs/projects/icml2027.md) evaluates domains, languages, capabilities or tasks from a JSON configuration and saves reproducible run artifacts.
 
 [Wanda frontiers and organization diagnostics](docs/pruning_and_organization.md) add independent target-calibrated pruning, held-out quality/cost curves and discovery activation/causal concentration, overlap and stability. Dense storage and nonzero weights are measured separately. These tools have been checked on tiny random-init models, without pretrained research runs.
 
 ## Config-driven Target Baseline
+
+For the current linked-task pilot, use the build/preflight/server instructions in
+[docs/projects/icml2027.md](docs/projects/icml2027.md). The commands below evaluate MC targets.
 
 Validate the example config and all dataset splits without loading a model:
 
@@ -140,7 +149,7 @@ python experiments/build_qa_v1.py --output data/prompt_sets/qa_v1.jsonl
 
 The prompt files in `data/prompts/` are only a small seed set. They are useful for testing the code path, not for making scientific claims. A serious experiment needs larger, balanced, held-out prompt sets and causal validation through ablation or pruning.
 
-See [docs/experiment_plan.md](docs/experiment_plan.md) for the first research roadmap.
+Use [docs/research_strategy.md](docs/research_strategy.md) for current priorities and [docs/projects/icml2027.md](docs/projects/icml2027.md) for the ICML pilot. [docs/experiment_plan.md](docs/experiment_plan.md) preserves the historical first roadmap.
 See [docs/metrics.md](docs/metrics.md) for the metric definitions.
 See [docs/prompt_dataset_protocol.md](docs/prompt_dataset_protocol.md) for the prompt collection protocol.
 See [docs/ablation.md](docs/ablation.md) for ablation details and caveats.

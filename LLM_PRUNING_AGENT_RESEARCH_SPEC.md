@@ -12,7 +12,8 @@
 | scientific design or new research abstractions | `AGENTS.md`, then §1–§2 of this file |
 | measurement, metrics, interventions | §3–§5, §14 |
 | compression, frontiers | §6–§7, §14 |
-| ICML 2027 project | §8 + `ICML2027_RELATED_WORK_AND_NOVELTY_AUDIT.md` §7a, §13 |
+| project priorities / collaboration scope | `docs/research_strategy.md`; do not load the whole spec |
+| ICML 2027 project | §8 + `docs/projects/icml2027.md`; literature only when evaluating claims |
 | UCT multilingual project | §9 |
 | Waikato streaming project | §10 |
 | configs, repo layout, reproducibility | §11–§13 |
@@ -29,9 +30,9 @@ The repository must **not** be hard-coded around one paper, one domain, or one h
 It hosts several **independent research projects** that share infrastructure but have their own questions, timelines, and collaborators:
 
 1. **ICML 2027 paper** (own project)
-   - functional / causal modularity at several structural scales,
-   - selective specialist compression,
-   - does internal organization predict achievable specialist size?
+   - primary publication objective,
+   - first screen composition loss under pruning, then causal support/mitigation,
+   - organization predicting specialist size remains a secondary candidate.
 
 2. **UCT / South Africa collaboration** (own project; overlaps with ICML only through shared tools and possibly language targets)
    - multilingual and low-resource language specialization,
@@ -43,7 +44,10 @@ It hosts several **independent research projects** that share infrastructure but
    - stream-based model-adequacy monitoring,
    - dynamic masks / capacity / precision under drift.
 
-Projects may reuse each other's components, but no project's deadlines or hypotheses should shape another project's code.
+Projects reuse tools, not a compulsory shared paper or hypothesis. Current priority
+and collaboration scope are owned by `docs/research_strategy.md`; partner deliverables
+are proposals until confirmed. ICML drives near-term development, without encoding
+its hypothesis in the shared core.
 
 The common abstraction is:
 
@@ -390,72 +394,87 @@ Each experiment produces a standard `frontier.csv`.
 
 # 8. ICML 2027 project
 
-Full rationale and literature: `ICML2027_RELATED_WORK_AND_NOVELTY_AUDIT.md`.
+Priorities/decision gates: `docs/research_strategy.md`.
+Draft operational protocol: `docs/projects/icml2027.md`.
+Literature/history: `ICML2027_RELATED_WORK_AND_NOVELTY_AUDIT.md` (not a frozen protocol).
 
 ## Main scientific question
 
-> **Does functional modularity at some structural scale predict how compressible a specialist capability/domain/language is — beyond trivial predictors?**
-> (Working framing: *Does Localization Inform Compression?*)
+> **Can pruning preserve constituent skills while damaging their composition,
+> and can localized support explain and mitigate that damage at matched cost?**
 
-\[
-\mathcal M_d^{(g)}
-\rightarrow
-B_d(\epsilon,\tau),
-\qquad
-B_d(\epsilon,\tau)
-=
-\min_S\operatorname{Cost}(S)
-\]
-
-subject to target/core quality constraints.
+First candidate to screen, not a claimed effect. The previous question — whether
+discovery-only organization predicts independent pruning curves beyond baseline
+quality/global sensitivity on unseen targets — remains a secondary analysis.
+The broad localization→compression framing is occupied; neither candidate has
+confirmed novelty. Keep necessary support, sufficient computation and compressibility distinct.
+The 13 Oct composition audit also finds close quantization and sparse-circuit
+precedents (PRISM, Compressed Lens, Circuit Claims, CircuitLoRA). See
+`docs/composition_novelty_review_2026-10-13.md`; compression-sensitive composition
+or extra circuit nodes alone are insufficient novelty claims.
 
 ## Non-negotiable design requirements
 
-1. **No circularity.** Modularity is measured on the discovery split from cheap local probes (single-component ablations, small subsets, activations). Frontiers are computed with an **independent** pruner (Wanda/SparseGPT with target calibration) and evaluated on the test split.
-2. **Baseline predictors.** Report whether modularity predicts \(B_d\) beyond: baseline accuracy on \(d\), knowledge frequency (head/tail), decodability, global pruning sensitivity, evaluation-set size/difficulty.
-3. **Many targets.** Aim for 25–40 targets (MMLU/MMLU-Pro subject clusters, Belebele languages, math, code), not 4.
-4. **Targets span the modularity axis.** Include targets expected to be modular at neuron level (languages), head level (math/code), and not at neuron level (academic subjects).
-5. **Held-out evaluation.** Fit on some targets, predict held-out targets; if ≥2 model families, fit on one, predict the other.
-6. **Robustness.** Bootstrap over examples and random controls; several calibration seeds; at least two pruners.
+1. **Linked cases.** A, B, A→B and staged/oracle-intermediate controls share case
+   identity; source/fact-group splitting keeps all variants in one split.
+2. **Baseline feasibility.** Establish pretrained competence, and control constituent
+   errors, propagation, prompt format/length and difficulty before claiming extra
+   composition loss. Context-supplied facts do not establish stored-knowledge localization.
+3. **Discovery/validation/test.** Discover support on discovery, fix choices on
+   validation, confirm on untouched test. Resampling respects episode groups.
+4. **Independent pruning.** Use established Wanda first. Causal probing and pruning
+   outcomes are distinct; targeted methods need held-out, equal-cost comparisons.
+5. **Practical controls.** Match calibration token budgets/source and repeat seeds;
+   distinguish necessity from sufficiency and nonzero weights from bytes/FLOPs.
+6. **Scope of evidence.** A small screen tests feasibility, not universal prediction.
+   Larger claims need new task combinations, model/pruner transfer and meaningful
+   precision; existing singleton/interaction methods are baselines, not new inventions.
 
 ## Granularities
 
-- attention heads,
-- grouped MLP channels,
-- layers.
+Start with attention heads and grouped MLP channels. Add layers/subspaces/edges
+only when a concrete test needs them. Avoid exhaustive individual-neuron experiments.
 
-Avoid exhaustive individual-neuron experiments.
+## Pilot and decision
 
-## Pilot (decision by ~20 Nov 2026)
+One pretrained 7–8B model, initially connected lookup→lookup with a separate
+lookup→addition family, linked controls and a
+small validation-fixed Wanda budget grid. Tiny random-init models only test code.
+Precise sources, evaluator, effect thresholds and sample sizes must be fixed before
+confirmation. The linked data/evaluator/paired-analysis pipeline and server preflight are
+complete locally. Context-supplied cases do not locate factual storage. Do not import
+every benchmark from the previous 15-target plan before feasibility.
+The controlled benchmark supersedes the station-count exercises; shared evidence,
+paired target/distractor/order/name probes and reference-only primary estimates are
+implemented. Design: `docs/composition_benchmark_design.md`; sample precision:
+`docs/composition_validation_plan.md`. Scientific acceptance requires dense competence
+and probe behavior; confirmation analysis and exact token controls precede test.
 
-```text
-model:        one 7–8B model (e.g. Qwen2.5-7B or Llama-3.1-8B); TinyLlama only for smoke tests
-targets:      ~15 (6–8 MMLU subject clusters, 2–3 Belebele languages, math, code)
-granularity:  heads + MLP groups
-diagnostics:  decodability, selectivity, single-component ablation, top-k vs layer-matched random
-frontier:     Wanda with target calibration; budgets 90, 75, 60, 50%
-key plot:     modularity (per granularity) vs minimal specialist budget, next to baseline predictors
-```
+Internal pilot review target: ~20 Nov 2026, conditional on server availability;
+this is not an ICML submission date. Gate: interpretable, precise signal beyond
+simpler controls and a concrete contribution beyond closest literature. If not met,
+revise the question or test another candidate; no automatic venue change or claim
+that a non-significant finding is a publishable negative result.
 
-Decision rules: see audit §13.
+## Outputs
 
-## Outputs per `(model, target, granularity)`
-
-1. activation organization metrics,
-2. causal importance metrics,
-3. target/non-target damage matrix,
-4. compression frontier (per pruner),
-5. modularity-vs-compressibility analysis with baseline predictors.
+Linked per-example decisions, A/B/composed/staged/oracle quality changes and intervals,
+calibration provenance, pruning cost curves, discovery support measurements and
+matched causal comparisons. All runs keep manifests and compact summaries.
+The short-answer evaluator, linked data/importer, paired analysis and independent
+Wanda screen are implemented and tested offline. Targeted restoration is later work.
 
 ---
 
 # 9. UCT / South Africa project
 
-Reuses the same abstractions with `target = language`.
+Planned independent collaboration; questions/data/deliverables need partner agreement.
+Reuses the same abstractions with `target = language`; it is not required for the
+first ICML screen. Language × capability/composition can become a shared use case.
 
-Context:
-- UCT NLP group (MzansiText/MzansiLM, 2026): a 125M decoder trained from scratch on 11 South African languages; small decoders stay near chance on reasoning/reading comprehension; corpus ~84% Afrikaans+English.
-- Prior work to position against: language-specific neurons (ACL 2024), CRANE (2026), language-targeted pruning limitations (TACL 2026: target-language calibration keeps perplexity but does not reliably help downstream tasks), translation specialists from MoE (2026).
+Before choosing a claim, check language-specific neuron, language-targeted pruning
+and translation-specialist precedents. Dataset/model access and baseline ability
+must be established; do not assume every South African language is already supported.
 
 Candidate questions:
 
@@ -468,6 +487,9 @@ Candidate questions:
 > Are low-resource languages less functionally modular or less compressible?
 
 For language \(\ell\): \(B_\ell(\epsilon,\tau)\) is the minimum specialist budget preserving that language and shared core abilities.
+Observed pruning curves bound achievable cost for specific methods; they do not
+identify the ideal minimum. From-scratch comparisons require transparent data,
+training/recovery cost, task and tokenizer differences, not just equal parameter counts.
 
 Compare:
 - high-resource vs low-resource languages,
@@ -475,14 +497,18 @@ Compare:
 - shared vs language-specific component support.
 
 Data: Belebele and other multilingual benchmarks first; UCT / Mzansi datasets later, without changing core code.
+Agree languages, licenses/source splits, instruction language and downstream
+evaluators with partners. Perplexity and downstream ability are separate outcomes.
 
 ---
 
 # 10. Waikato / streaming project
 
-**Independent of the ICML paper.** Shares only infrastructure (models, masks, evaluation).
+**Independent planned collaboration, not part of the ICML paper.** Shares
+infrastructure (models, masks, evaluation) and potentially controlled competence
+tasks. Partner scope/deadlines are not confirmed here.
 
-Start after static specialist tooling is stable.
+Prepare protocol in parallel; implement streaming after static tooling is validated.
 
 A specialist is optimized for a competence envelope \(\mathcal C_t\). The stream may later require \(\mathcal C_{t+1}\neq\mathcal C_t\):
 - new topic/domain appears,
@@ -505,10 +531,19 @@ Possible actions:
 stream -> adequacy monitor -> capacity controller -> specialist model
 ```
 
+Prequential evaluation must score before adaptation, with explicit label delay;
+calibration uses only available past data. Compare fixed specialist/generalist
+and capacity actions. Count monitoring, recalibration and any stored dense model
+needed for fallback/restoration. A removed weight cannot be restored without a
+stored source; zero masks do not themselves save physical memory.
+
 Novelty notes (check before committing to a framing):
 - "specialist with fallback to a large model" overlaps heavily with **LLM routing / cascades**,
-- "drift-adaptive inference-time pruning" is partly taken by **DART (2026)**, though there drift means context shift within a single generation,
-- the likely distinctive contribution is **data-stream methodology**: prequential evaluation, label-free competence-drift detection, controlled competence-shift benchmarks, cost-aware capacity control. Natural venues: ECML-PKDD, KDD, Machine Learning journal.
+- previously listed DART/context-adaptive pruning is a related-work candidate
+  requiring separate verification; context shift within generation is distinct
+  from a prequential data stream,
+- candidate contribution: competence-drift methodology, controlled shifts and
+  cost-aware capacity control; novelty and venue must be agreed/checked separately.
 
 ---
 
@@ -653,33 +688,43 @@ Avoid common methodological errors:
 
 # 15. Development priorities
 
-## Phase 1 — minimal pipeline for the ICML pilot (now → ~25 Oct)
+Dates below are internal planning targets, conditional on hardware availability;
+ICML 2027 submission dates have not been verified. Phase 1 is complete locally,
+Phase 2 has not started; current evidence/status is in `STATUS.md`.
 
-Only what the pilot needs, built generically:
-1. generic target spec (`domain`, `language`, `capability`, `task`),
-2. stable component IDs for heads and MLP groups,
-3. head and MLP-group masking for Llama/Qwen 7–8B,
-4. Wanda (target-calibrated) integration and per-target evaluation,
-5. result manifest + `summary.md` per run,
-6. data import: MMLU subject clusters, Belebele subset, GSM8K, HumanEval/MBPP.
+## Phase 1 — completed locally, 12 Oct 2026
+
+Available offline: target spec, component IDs/masks, MC scoring, Wanda frontiers,
+uncertainty, diagnostics and run artifacts. Pretrained validation is outstanding.
+Also available: linked-task contract, controlled data/numeric-fact importer, integer
+generation evaluator, staged/oracle controls, paired source-group analysis, server
+config/preflight and frozen-test lock. Pretrained feasibility/precision are Phase 2.
+Do not rebuild completed infrastructure or import all benchmark families up front.
 
 ## Phase 2 — ICML pilot (→ ~20 Nov)
 
-See §8. Decision go/no-go.
+See §8 and `docs/projects/icml2027.md`. Validate pretrained feasibility, then the
+composition screen and controls. Review candidate strength before causal scale-up.
 
 ## Phase 3 — ICML scale-up (Dec–Jan), if GO
 
-Second model family, 25–40 targets, second pruner, baseline predictors, held-out analysis, layer granularity.
+Targeted causal retention/restoration, equal-cost controls, second model/pruner and
+new task compositions as justified by the pilot. Prior predictive analysis remains
+optional and needs its own target-level sample/held-out design.
 
-If NO-GO: document the result, test another scale (subspace/pathway), retarget to NeurIPS 2027.
+If NO-GO: document precision/controls and revisit the question. ICML remains the
+publication objective until explicitly changed; no automatic NeurIPS fallback.
 
 ## Phase 4 — UCT project
 
-Multilingual target datasets, language-specific/shared metrics, low-resource comparisons, comparison with small from-scratch models.
+Partner preparation may proceed now; implementation follows agreed language/data
+scope and reuses validated static tools. Language-specific/shared metrics and
+carefully matched low-resource/from-scratch comparisons are candidate deliverables.
 
 ## Phase 5 — Waikato project
 
-Stream interfaces, controlled competence shifts, adequacy monitoring, adaptive capacity actions.
+Partner protocol preparation may proceed now. Later implementation: stream interfaces,
+controlled competence shifts, prequential evaluation and cost-aware capacity actions.
 
 ---
 
@@ -712,24 +757,22 @@ The repository will grow large. Keep the agent's context small:
 6. **Keep always-loaded files short**: `AGENTS.md` < 150 lines, `STATUS.md` one screen. Long material lives in docs read on demand.
 7. **One task per session.** Start a fresh session for unrelated work instead of continuing a long one.
 8. **Specific task prompts** ("add head masking for Qwen2 in `interventions/masks.py`, test with tiny config") instead of open-ended ones ("improve the framework").
-9. **Delegate bulky exploration** (searching many files, reading long logs) to a cheaper subagent that returns a short summary.
+9. **Do not spawn subagents by default.** Delegate only when explicitly requested
+   or required by applicable instructions; use targeted reads first.
 
 ---
 
 # 17. Immediate next milestone
 
-### **Minimal generic pipeline for the ICML pilot**
+### **Phase 2: pretrained feasibility and validation screen**
 
-Deliverables:
-- target abstraction supporting `domain`, `language`, `capability`, `task`,
-- stable component IDs for heads and MLP groups,
-- head / MLP-group masking for a 7–8B Llama/Qwen model,
-- target-calibrated Wanda + per-target evaluation,
-- discovery/validation/test-aware evaluation,
-- experiment config format,
-- result manifest + `summary.md`.
-
-Then run the pilot in §8.
+Phase 1 deliverables are implemented offline; exact commands/configs live in
+`docs/projects/icml2027.md`. A fresh server starts with `docs/server_handoff.md`:
+rebuild ignored datasets, pin/cache model and tokenizer, then an eight-group dense
+baseline (`--baseline-only`). Next: validate pretrained 7–8B baseline
+task/prompt competence, benchmark runtime and run the small validation screen.
+Then assess effect/precision and freeze choices before test. Restoration, stream
+controllers and functional quantization are later work, not screen prerequisites.
 
 The goal is not to prove the ICML hypothesis. The goal is to find out quickly whether it is worth a paper, while building tools that the UCT and Waikato projects can reuse.
 

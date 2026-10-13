@@ -1,5 +1,10 @@
 # Paper Readiness Plan
 
+**Historical TinyLlama/QA-v1 plan; not the current ICML 2027 plan.** Use
+[research_strategy.md](research_strategy.md) and [projects/icml2027.md](projects/icml2027.md).
+Claims and priorities below are archived exploratory assessments, not confirmed
+ICML evidence or present instructions to scale these experiments.
+
 Current pilot claim:
 
 > In TinyLlama on QA v1, domain-selective attention heads show a dose-dependent causal ablation effect on held-out agriculture QA loss, while highly discriminative MLP neuron proxies do not show comparable causal effects.

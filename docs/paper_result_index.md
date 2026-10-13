@@ -1,6 +1,11 @@
 # Paper Result Index
 
-This file is the decision layer above `docs/experiment_log.md`. It tracks which results are ready for paper figures/tables, which are supporting evidence, and which remain exploratory.
+**Historical result index.** Labels such as "strong" and "yes" below are archived
+assessments, not current ICML figure selection or confirmed scientific claims.
+Current decisions: [research_strategy.md](research_strategy.md); pilot: [projects/icml2027.md](projects/icml2027.md).
+Keep the old entries for traceability; re-audit source artifacts before reuse.
+
+This file tracks the earlier exploratory results above `docs/experiment_log.md`.
 
 ## Current Thesis
 

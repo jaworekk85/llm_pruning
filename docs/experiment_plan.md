@@ -1,5 +1,9 @@
 # Experiment Plan
 
+**Historical seed/TinyLlama roadmap, superseded for current priorities.** Use
+[research_strategy.md](research_strategy.md) and [projects/icml2027.md](projects/icml2027.md).
+The commands and proposed next steps below describe the earlier stage.
+
 The first research question is:
 
 > Are domain-relevant computations in a small language model more concentrated in some components than expected by chance?

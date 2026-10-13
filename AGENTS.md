@@ -7,12 +7,14 @@ Long-form reference: `LLM_PRUNING_AGENT_RESEARCH_SPEC.md` — read **only the se
 
 An experimental field for studying how knowledge, capabilities, domains and languages are organized inside pretrained LLMs, and how that relates to selective compression and specialization.
 
-Independent projects share this code:
-- **ICML 2027**: does functional modularity predict specialist compressibility? (`experiments/icml2027/`, literature: `ICML2027_RELATED_WORK_AND_NOVELTY_AUDIT.md`)
-- **UCT**: multilingual / low-resource language specialists (`experiments/uct_multilingual/`)
-- **Waikato**: specialists under stream drift; not part of the ICML paper (`experiments/waikato_streaming/`)
+Independent projects share this code; **ICML 2027 is the primary publication objective**:
+- **ICML 2027**: first screen composition loss under pruning; organization→compressibility remains a secondary candidate (`experiments/icml2027/`, protocol: `docs/projects/icml2027.md`). Neither hypothesis is confirmed.
+- **UCT / South Africa**: planned collaboration on multilingual / low-resource specialists (`experiments/uct_multilingual/`). Partner scope remains to be agreed.
+- **Waikato / New Zealand**: planned collaboration on specialists under competence drift; separate from ICML (`experiments/waikato_streaming/`).
 
-Current state and next step: `STATUS.md`.
+Current state and next step: `STATUS.md`. Priorities/decision gates: `docs/research_strategy.md` (read only for research planning). Literature: `ICML2027_RELATED_WORK_AND_NOVELTY_AUDIT.md`.
+For a new GPU server: read `docs/server_handoff.md` after STATUS. First task is dense
+`--baseline-only` on controlled lookup; generated `results/` data must be rebuilt.
 
 ## Layout
 
