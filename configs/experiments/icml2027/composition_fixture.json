@@ -1,0 +1,19 @@
+{
+  "experiment_name": "composition_fixture_screen_v2",
+  "dataset_path": "../../../results/composition_fixture_v2/records.jsonl",
+  "model_name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+  "device": "cpu",
+  "dtype": "float32",
+  "local_files_only": true,
+  "split": "validation",
+  "seed": 2027,
+  "prompt_policy": "plain_short_v1",
+  "batch_size": 4,
+  "max_new_tokens": 4,
+  "retained_fractions": [1.0, 0.5],
+  "calibration_modes": ["composed", "mixed"],
+  "calibration_seeds": [11],
+  "calibration_token_budget": 64,
+  "bootstrap_samples": 100,
+  "fixture_run": true
+}
