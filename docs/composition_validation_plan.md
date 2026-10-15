@@ -1,66 +1,10 @@
-# Composition tasks and precision — local review, 13 Oct 2026
+# Composition uncertainty and confirmation plan
 
-This file owns the pre-GPU task review and statistical design. Run commands and
-the implemented contract remain in [icml2027.md](projects/icml2027.md).
-Novelty decision: [focused review](composition_novelty_review_2026-10-13.md).
-No pretrained outputs have been observed; all numbers below are design scenarios.
-Current task design and implemented controls:
-[composition_benchmark_design.md](composition_benchmark_design.md). The station-count
-review below is historical; its v2 exercise is not the current research candidate.
-
-## Task review and changes
-
-Inspected complete linked variants for two ID-sorted validation cases in v1,
-then a linked validation case and validation-wide structural counts in v2.
-Gold formulas, all source boundaries and staged wiring are checked offline.
-This is a logic/prompt review, not human annotation or model feasibility evidence.
-
-The v1 task admits shortcuts: target sentence always first, target entity always
-the non-X name, distractor count always target+7. The composed prompt also asks
-the retrieval question and arithmetic question in succession, which can invite
-two outputs despite the integer-only contract.
-
-`count_affine_v2` removes these shortcuts: target and distractor use the same
-name format, target identity and sentence order are shuffled, and distractor
-counts are sampled independently with equal counts rejected. The composed
-instruction explicitly suppresses the intermediate output and requests the
-final result. Difficulty metadata distinguishes lookup, affine and lookup-affine.
-Validation target sentence positions: first 62 / second 66, out of 128 cases.
-The v1 artifacts are preserved; configs now refer to fresh v2 folders.
-
-Example from v2 validation (`context.0`):
-
-| Variant | Content | Gold |
-|---|---|---|
-| A | Station-00001 holds 92; Station-00000 holds 486. Query Station-00000. | 486 |
-| B | Given count 486, compute 5×count+3. | 2433 |
-| Composed | Retrieve Station-00000's count, output only 5×answer+3. | 2433 |
-| Oracle | Same composed input, plus the correct intermediate 486. | 2433 |
-| Staged | Query A, pass its actual parsed integer to B; malformed A fails the case. | 2433 |
-
-B is a skill bundle (multiplication plus addition), not necessarily a primitive
-neural operation. The two stages mean lookup followed by affine computation.
-Numbers, templates and English instruction remain narrow; identical arithmetic
-can recur across independent station cases. Case IDs prevent exact prompt collisions
-but do not establish a held-out arithmetic-template or skill-combination split.
-
-## Controls still requiring pretrained validation
-
-| Risk | Required validation comparison before a neural claim |
-|---|---|
-| Different input lengths/context | B supplied with the same irrelevant station context; a length-matched lookup-only task; exact token counts under the selected tokenizer. |
-| Order or identity shortcut | Evaluate counterbalanced target positions, renamed entities and shuffled context at dense and selected pruned points; retain source grouping. |
-| Arithmetic difficulty/ceiling | Inspect multiplier, digit length and carry difficulty; select an adequate family on validation, not test. Dense ≥.70 is only initial feasibility. |
-| Answer formatting vs ability | Report invalid separately from valid-but-wrong outputs, retained raw text and truncation/context diagnostics. Do not silently relax the parser after test. |
-| Extra computation/information | Staged uses two calls; oracle supplies a gold intermediate. Track inference cost and interpret their advantages diagnostically. |
-| Calibration mismatch | Compare composed vs mixed discovery pools at equal tokens, repeat seeds; later reasoning-trace controls if the claim concerns decode-time reasoning. |
-| Unsupported factual-storage claim | Context lookup is knowledge use; imported closed-book facts require a separate audited parametric-recall cohort. |
-
-The new controlled benchmark implements shared evidence and target/distractor/
-order/name probes in complete source groups. Exact token-length controls, real-fact
-audits and pretrained feasibility remain open; see the current design document.
-Select no test examples by pruned-model success. Review a larger human sample
-when importing real facts, including aliases, arithmetic units and licenses.
+This file owns statistical design. Task semantics and implemented input controls:
+[benchmark design](composition_benchmark_design.md). Setup/commands:
+[server handoff](server_handoff.md). All size numbers below are design scenarios;
+no pretrained model results have been observed. The earlier station-count review
+is [preserved in Git](README.md#historical-versions).
 
 ## Estimands and confirmation rule
 
@@ -138,12 +82,11 @@ seed spread. Choose 512–2048 as candidate confirmation sizes only if validatio
 supports the assumed variability and resource cost. Otherwise revise the design;
 never interpret insufficient precision as a negative finding.
 
-Reserve confirmation cases before model-driven choices and expand using fresh
-source/fact populations or preserving existing split assignments. Rebuilding the
-generator with a different `episodes_per_split` changes its shuffle and can move
-the same IDs/facts across splits: it is not a safe expansion of a used dataset.
-Audit new data against all previously used discovery/validation groups, rather
-than relying only on the runner's within-file checks.
+Reserve confirmation cases before model-driven choices. The current controlled
+builder preserves existing facts and splits when increasing `groups_per_split`.
+Audit expansions against previously used discovery/validation groups. The historical
+station-count builder's `episodes_per_split` does not preserve splits and must not
+be used to expand a used scientific cohort.
 
 Before test: freeze primary conditions, alpha allocation, sample size, grouping,
 eligibility, parser/prompts, control contrasts and analysis code. For a claim over
