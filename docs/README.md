@@ -7,6 +7,7 @@ A routine fix does not need the research strategy, long spec or literature audit
 
 | Question | Owning file |
 |---|---|
+| What can we study now and later? (Polish guide) | [Research capabilities](research_capabilities.md) |
 | Current state and next action | [STATUS](../STATUS.md) |
 | New GPU server: setup and ordered commands | [Server handoff](server_handoff.md) |
 | Research priorities, phases and partner scope | [Research strategy](research_strategy.md) |

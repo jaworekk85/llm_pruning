@@ -15,6 +15,9 @@ Context tasks measure use of supplied facts, not factual storage in model weight
 
 ## Find the relevant document
 
+[Co można zbadać z tym repo?](docs/research_capabilities.md) — Polish guide to
+available experiments, GPU-dependent work and planned extensions.
+
 [Documentation index](docs/README.md) lists the owner of each topic and historical
 material. [Code map](docs/code_map.md) locates modules without reading the source tree.
 Agent rules: [AGENTS.md](AGENTS.md).
